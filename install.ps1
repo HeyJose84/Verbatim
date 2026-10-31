@@ -1,10 +1,11 @@
-# Auto Subtitles Generator - Installer / Linker for Adobe After Effects
+# Verbatim - Installer / Linker for Adobe After Effects
 $PluginDir = $PSScriptRoot
 $CepDir = "$env:APPDATA\Adobe\CEP\extensions"
-$TargetDir = "$CepDir\com.brandstales.autosubtitles"
+$TargetDir = "$CepDir\com.brandstales.verbatim"
+$OldTargetDir = "$CepDir\com.brandstales.autosubtitles"
 
 Write-Host "==========================================================" -ForegroundColor Cyan
-Write-Host " Installing Auto Subtitles Generator for After Effects..." -ForegroundColor Cyan
+Write-Host " Installing Verbatim Subtitles for After Effects..." -ForegroundColor Cyan
 Write-Host "==========================================================" -ForegroundColor Cyan
 
 # 1. Ensure CEP extensions folder exists
@@ -12,20 +13,29 @@ if (-not (Test-Path $CepDir)) {
     New-Item -ItemType Directory -Path $CepDir -Force | Out-Null
 }
 
-# 2. Remove existing link or directory if present
+# 2. Clean up old extension folder if it existed under legacy name
+if (Test-Path $OldTargetDir) {
+    Write-Host "Cleaning up legacy extension folder..." -ForegroundColor Gray
+    cmd /c rmdir "$OldTargetDir" 2>$null
+    if (Test-Path $OldTargetDir) {
+        Remove-Item -Recurse -Force $OldTargetDir -ErrorAction SilentlyContinue
+    }
+}
+
+# 3. Remove existing link or directory if present
 if (Test-Path $TargetDir) {
     Write-Host "Updating previous installation..." -ForegroundColor Yellow
     cmd /c rmdir "$TargetDir" 2>$null
     if (Test-Path $TargetDir) {
-        Remove-Item -Recurse -Force $TargetDir
+        Remove-Item -Recurse -Force $TargetDir -ErrorAction SilentlyContinue
     }
 }
 
-# 3. Create Junction link so edits are immediately reflected in AE
+# 4. Create Junction link so edits are immediately reflected in AE
 Write-Host "Linking extension to $TargetDir..." -ForegroundColor Green
 New-Item -ItemType Junction -Path $TargetDir -Target $PluginDir | Out-Null
 
-# 4. Enable PlayerDebugMode in Windows Registry for CEP panels (CSXS 9 - 16)
+# 5. Enable PlayerDebugMode in Windows Registry for CEP panels (CSXS 9 - 16)
 Write-Host "Configuring Adobe CEP debug mode..." -ForegroundColor Cyan
 9..16 | ForEach-Object {
     $key = "HKCU:\Software\Adobe\CSXS.$_"
@@ -35,7 +45,7 @@ Write-Host "Configuring Adobe CEP debug mode..." -ForegroundColor Cyan
     Set-ItemProperty -Path $key -Name "PlayerDebugMode" -Value "1" -Force
 }
 
-# 5. Check Python & Speech Engine dependencies
+# 6. Check Python & Speech Engine dependencies
 Write-Host "Checking Python speech engine requirements..." -ForegroundColor Cyan
 $pythonExe = $null
 $candidates = @(
@@ -76,8 +86,8 @@ if ($pythonExe) {
 
 Write-Host ""
 Write-Host "==========================================================" -ForegroundColor Green
-Write-Host " Auto Subtitles Generator successfully installed!" -ForegroundColor Green
+Write-Host " Verbatim successfully installed!" -ForegroundColor Green
 Write-Host "==========================================================" -ForegroundColor Green
 Write-Host "Next steps:"
 Write-Host "1. Restart Adobe After Effects (or launch it if closed)."
-Write-Host "2. In After Effects menu, open: Window -> Extensions -> Auto Subtitles Generator"
+Write-Host "2. In After Effects menu, open: Window -> Extensions -> Verbatim"

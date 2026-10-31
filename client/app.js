@@ -1,5 +1,5 @@
 /**
- * Auto Subtitles Generator - Client Panel Controller
+ * Verbatim - After Effects Subtitles Extension
  * Handles speech transcription, font variations, persistent styling,
  * transcription review & approval, word-level confidence indicators, and single/batch subtitle generation
  */
@@ -1484,5 +1484,5 @@ function handleError(msg) {
     setStatus("❌ Error: " + msg, false, 0);
     appendLog("ERROR: " + msg);
     document.getElementById("btnGenerate").disabled = false;
-    alert("Auto Subtitles: " + msg);
+    alert("Verbatim: " + msg);
 }

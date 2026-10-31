@@ -1,5 +1,5 @@
 /**
- * Auto Subtitles Generator - Host ExtendScript
+ * Verbatim - Host ExtendScript
  * Compatible with Adobe After Effects CS6 through 2026+
  */
 
@@ -365,7 +365,7 @@ function updateSubtitlesFont(compId, postScriptName) {
  * Fully isolated per composition and fully keyframe-animatable!
  */
 function generateSubtitles(payloadJsonStr) {
-    app.beginUndoGroup("Auto Subtitles Generator");
+    app.beginUndoGroup("Verbatim Generate Subtitles");
     try {
         var payload = SubtitleJSON.parse(payloadJsonStr);
         var targetComp = app.project.itemByID(payload.targetCompId);

@@ -1,6 +1,6 @@
-# Auto Subtitles Generator (After Effects CEP Extension)
+# Verbatim (After Effects CEP Extension)
 
-An automated Adobe After Effects extension panel that generates synchronized, animated TikTok/Reels subtitles directly from audio files or existing composition audio with one click — featuring full **Batch Processing**, **Interactive Transcription Review**, and **Dynamic Word Re-synchronization**.
+**Verbatim** is an automated Adobe After Effects extension that transcribes audio and builds synchronized, animated TikTok/Reels subtitles with one click — featuring full **Batch Processing**, **Interactive Transcription Review**, and **Dynamic Word Re-synchronization**.
 
 ## Features & Version Updates (v1.4.0)
 
@@ -58,7 +58,7 @@ An automated Adobe After Effects extension panel that generates synchronized, an
 ## Folder Structure
 
 ```text
-auto-subtitles-plugin/
+Verbatim/
 ├── CSXS/
 │   └── manifest.xml         # CEP Extension declaration (AEFT 16.0 - 99.9)
 ├── client/
@@ -87,7 +87,7 @@ auto-subtitles-plugin/
 ### Step 1: Download or Clone
 - **Via Git**:
   ```bash
-  git clone https://github.com/HeyJose84/auto-subtitles-generator.git
+  git clone https://github.com/HeyJose84/Verbatim.git
   ```
 - **Via ZIP**:
   Click the green **Code** button on GitHub and select **Download ZIP**, then extract it to a folder on your computer.
@@ -96,9 +96,9 @@ auto-subtitles-plugin/
 
 ### Step 2: Run the Installer (Windows)
 1. Open the folder where you extracted or cloned the files.
-2. Double-click `install.bat` (or right-click `install.ps1` and choose **Run with PowerShell**).
+2. Double-click **`install.bat`** (or right-click `install.ps1` and choose **Run with PowerShell**).
 3. The script automatically:
-   - Links the extension into Adobe's CEP extensions folder (`%APPDATA%\Adobe\CEP\extensions\com.brandstales.autosubtitles`).
+   - Links the extension into Adobe's CEP extensions folder (`%APPDATA%\Adobe\CEP\extensions\com.brandstales.verbatim`).
    - Configures Adobe CEP `PlayerDebugMode=1` in your Windows registry so After Effects loads the extension.
    - Verifies and installs `faster-whisper` speech recognition dependencies via pip.
 
@@ -106,5 +106,5 @@ auto-subtitles-plugin/
 
 ### Step 3: Launch in After Effects
 1. Restart Adobe After Effects (or open it).
-2. Go to the top menu bar: **Window > Extensions > Auto Subtitles Generator**.
+2. Go to the top menu bar: **Window > Extensions > Verbatim**.
 3. The panel is ready to generate animated, synchronized subtitles!

@@ -1,6 +1,6 @@
 @echo off
 echo ========================================================
-echo  Auto Subtitles Generator - One-Click Installer
+echo  Verbatim - One-Click Installer for Adobe After Effects
 echo ========================================================
 echo.
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0install.ps1"

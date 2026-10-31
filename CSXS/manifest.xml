@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<ExtensionManifest Version="11.0" ExtensionBundleId="com.brandstales.autosubtitles" ExtensionBundleVersion="1.3.0"
-                   ExtensionBundleName="Auto Subtitles Generator" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<ExtensionManifest Version="11.0" ExtensionBundleId="com.brandstales.verbatim" ExtensionBundleVersion="1.4.0"
+                   ExtensionBundleName="Verbatim" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <ExtensionList>
-    <Extension Id="com.brandstales.autosubtitles.panel" Version="1.3.0" />
+    <Extension Id="com.brandstales.verbatim.panel" Version="1.4.0" />
   </ExtensionList>
   <ExecutionEnvironment>
     <HostList>
@@ -16,7 +16,7 @@
     </RequiredRuntimeList>
   </ExecutionEnvironment>
   <DispatchInfoList>
-    <Extension Id="com.brandstales.autosubtitles.panel">
+    <Extension Id="com.brandstales.verbatim.panel">
       <DispatchInfo>
         <Resources>
           <MainPath>./client/index.html</MainPath>
@@ -36,7 +36,7 @@
         </Lifecycle>
         <UI>
           <Type>Panel</Type>
-          <Menu>Auto Subtitles Generator</Menu>
+          <Menu>Verbatim</Menu>
           <Geometry>
             <Size><Height>640</Height><Width>360</Width></Size>
             <MinSize><Height>400</Height><Width>280</Width></MinSize>
