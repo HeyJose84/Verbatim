@@ -69,13 +69,42 @@ auto-subtitles-plugin/
 ├── jsx/
 │   └── host.jsx             # ExtendScript builder, comp isolation & animatable controllers
 ├── backend/
+│   ├── requirements.txt     # Python speech engine dependencies
 │   └── transcribe_engine.py # Faster-whisper transcription & phrase chunking CLI
-├── install.ps1              # One-click installer & registry configurator
+├── install.bat              # One-click Windows installer (double-click to install)
+├── install.ps1              # PowerShell installer & CEP registry configurator
 └── README.md                # Documentation
 ```
 
-## Installation / Update
+## Installation Guide (For Any User)
 
-1. The plugin is linked directly to your Adobe CEP directory:
-   `%APPDATA%\Adobe\CEP\extensions\com.brandstales.autosubtitles`
-2. Open After Effects and access via **Window > Extensions > Auto Subtitles Generator**.
+### Prerequisites
+1. **Adobe After Effects** (2019 / v16.0 or newer).
+2. **Python 3.9+** installed and added to your system `PATH`.
+
+---
+
+### Step 1: Download or Clone
+- **Via Git**:
+  ```bash
+  git clone https://github.com/HeyJose84/auto-subtitles-generator.git
+  ```
+- **Via ZIP**:
+  Click the green **Code** button on GitHub and select **Download ZIP**, then extract it to a folder on your computer.
+
+---
+
+### Step 2: Run the Installer (Windows)
+1. Open the folder where you extracted or cloned the files.
+2. Double-click `install.bat` (or right-click `install.ps1` and choose **Run with PowerShell**).
+3. The script automatically:
+   - Links the extension into Adobe's CEP extensions folder (`%APPDATA%\Adobe\CEP\extensions\com.brandstales.autosubtitles`).
+   - Configures Adobe CEP `PlayerDebugMode=1` in your Windows registry so After Effects loads the extension.
+   - Verifies and installs `faster-whisper` speech recognition dependencies via pip.
+
+---
+
+### Step 3: Launch in After Effects
+1. Restart Adobe After Effects (or open it).
+2. Go to the top menu bar: **Window > Extensions > Auto Subtitles Generator**.
+3. The panel is ready to generate animated, synchronized subtitles!
