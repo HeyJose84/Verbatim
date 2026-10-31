@@ -1,9 +1,29 @@
 # Auto Subtitles Generator (After Effects CEP Extension)
 
-An automated Adobe After Effects extension panel that generates synchronized, animated TikTok/Reels subtitles directly from audio files or existing composition audio with one click — featuring full **Batch Processing** support.
+An automated Adobe After Effects extension panel that generates synchronized, animated TikTok/Reels subtitles directly from audio files or existing composition audio with one click — featuring full **Batch Processing**, **Interactive Transcription Review**, and **Dynamic Word Re-synchronization**.
 
-## Features & Version Updates (v1.3.0)
+## Features & Version Updates (v1.4.0)
 
+- **🔍 Interactive Transcription Review & Approval Modal**:
+  - Optional pre-generation review (`[✔] Review & edit transcription before building in AE`).
+  - View all phrase chunks before anything is written to the After Effects timeline.
+  - Quick inline phrase text editing and phrase merging (`Merge with Next`).
+- **🎯 Dynamic Word Re-synchronization (Fix Split Words & Word Count Shifts)**:
+  - When editing a phrase that splits a word across chunks, or changing a chunk from e.g. 3 words to 2 words, the engine calculates proportional, character-weighted durations:
+    $$\text{wordDuration}_i = \text{totalDuration} \times \frac{\text{length}(\text{word}_i)}{\sum \text{length}}$$
+  - Automatically preserves highlight box alignment, pop animations, and word-by-word timing without breaking After Effects precomps.
+- **📊 Transcription Confidence Index & Badges**:
+  - Each chunk displays an automated confidence indicator calculated from word log-probabilities:
+    - 🟢 High Confidence (≥ 80%)
+    - 🟡 Medium Confidence (60% – 79%)
+    - 🔴 Low Confidence (< 60%)
+  - Filter by `⚠️ Low Confidence` to focus only on uncertain words without reviewing the whole script.
+- **⚡ Organized Effect Controls Panel Grouping**:
+  - Structured visual header banners on the `[CTRL] Subtitles` null:
+    - `══ [1] SETUP & TIMING ══` (Vertical Position Y, Word Spacing, Pop Scale Amount)
+    - `══ [2] FONT & TEXT ══` (Font Size, Text Color)
+    - `══ [3] HIGHLIGHT BOX ══` (Box Color, Box Opacity, Box Roundness, Padding X/Y)
+    - `══ [4] DROP SHADOW ══` (Shadow Color, Opacity, Distance, Softness)
 - **⚡ Batch Composition Processing**:
   - Select multiple compositions in your project simultaneously via a checklist.
   - "Select All" / "Deselect All" one-click toggles.
@@ -15,21 +35,12 @@ An automated Adobe After Effects extension panel that generates synchronized, an
   - Re-generating subtitles for one composition never modifies, overwrites, or deletes subtitles from any other composition.
 - **Keyframe-Animatable Style Controllers**:
   - Solves the nested precomp time-drift issue by resolving global timeline time $\text{globalTime} = \text{time} + \text{chunkComp.startTime} + \text{subComp.startTime}$.
-  - You can now set normal keyframes on the `[CTRL] Subtitles` null layer to smoothly animate:
-    - **Box Color** (animate fill color shifts over time)
-    - **Box Opacity**
-    - **Font Size**
-    - **Text Color**
-    - **Word Spacing**
-    - **Vertical Position Y**
-    - **Box Roundness & Padding**
-    - **Drop Shadow** (Color, Opacity, Distance, Softness)
+  - You can set normal keyframes on the `[CTRL] Subtitles` null layer to smoothly animate Box Color, Opacity, Font Size, Text Color, etc.
 - **Settings Persistence & Project Inheritance**:
-  - Automatically preserves your customized styles (colors, font family/variation, sizes, shadows, padding) in local storage.
-  - Detects existing subtitle controller settings from the active project so you don't have to reconfigure them every time.
+  - Automatically preserves your customized styles in local storage.
+  - Detects existing subtitle controller settings from the active project.
 - **Distinct Controller Identification**:
-  - Properly names the controller null: `[CTRL] Subtitles - <CompName>`.
-  - Color-tagged with vibrant Cyan (label 13) for instant recognition in complex timelines.
+  - Controller null named `[CTRL] Subtitles - <CompName>` with Cyan color tag (label 13).
   - Reference text layer named `[REF] Subtitle Style - <CompName>` with Green color tag (label 9).
 - **Installed Fonts & Variations**:
   - Live dropdown of installed system fonts with variations (e.g., *Sharp Grotesk* Bold 16, SemiBold 16, Book 19).
