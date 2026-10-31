@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Auto Subtitles Generator</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Header -->
+  <header class="panel-header">
+    <div class="panel-title">
+      <svg viewBox="0 0 24 24">
+        <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V6h16v12zM6 10h2v2H6zm0 4h8v2H6zm10 0h2v2h-2zm-6-4h8v2h-8z"/>
+      </svg>
+      <span>Auto Subtitles</span>
+    </div>
+    <span class="badge">v1.3.0</span>
+  </header>
+
+  <!-- Source Selection Tabs -->
+  <div class="tab-container">
+    <button class="tab-btn active" id="tabAudioFile" onclick="switchSourceMode('file')">Audio File</button>
+    <button class="tab-btn" id="tabCompAudio" onclick="switchSourceMode('comp')">Single Comp</button>
+    <button class="tab-btn" id="tabBatch" onclick="switchSourceMode('batch')">⚡ Batch Comps</button>
+  </div>
+
+  <!-- Mode 1: Audio File -->
+  <div id="sectionAudioFile">
+    <div class="card">
+      <div class="card-title">
+        <span>Audio File</span>
+      </div>
+      <input type="file" id="audioFileInput" accept=".wav,.mp3,.m4a,.aac,.flac,.aif,.ogg" style="display: none;" onchange="handleFileSelected(event)">
+      <div class="file-picker-box" onclick="document.getElementById('audioFileInput').click()">
+        <svg style="width: 20px; height: 20px; fill: #858585; margin: 0 auto 4px;" viewBox="0 0 24 24">
+          <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+        </svg>
+        <div id="filePickerLabel" style="font-weight: 500;">Click to select audio file</div>
+        <div class="file-name-display" id="selectedFileName">No file selected</div>
+        <div class="file-path-sub" id="selectedFilePath"></div>
+      </div>
+    </div>
+
+    <!-- Destination Comp for Audio File -->
+    <div class="card">
+      <div class="card-title">Target Destination</div>
+      <div class="radio-group">
+        <label class="radio-item">
+          <input type="radio" name="destChoice" value="existing" checked onchange="toggleDestView()">
+          <span>Add to Existing Composition</span>
+        </label>
+        <div id="existingCompSelectRow" class="form-group" style="margin-left: 20px; margin-top: 4px;">
+          <div class="input-row">
+            <select id="destCompSelect" onchange="handleTargetCompChange()"></select>
+            <button class="btn btn-icon" title="Refresh Compositions" onclick="refreshProjectComps()">↻</button>
+          </div>
+        </div>
+
+        <label class="radio-item" style="margin-top: 4px;">
+          <input type="radio" name="destChoice" value="new" onchange="toggleDestView()">
+          <span>Create New Blank Composition</span>
+        </label>
+        <div id="newCompSettingsRow" style="display: none; margin-left: 20px; margin-top: 6px;">
+          <div class="form-group">
+            <label for="newCompName">Comp Name</label>
+            <input type="text" id="newCompName" value="Subtitled Video">
+          </div>
+          <div class="form-group">
+            <label for="newCompPreset">Format & Aspect Ratio</label>
+            <select id="newCompPreset" onchange="handlePresetChange()">
+              <option value="1080x1920" selected>Vertical 9:16 (1080 × 1920) [Reels / TikTok]</option>
+              <option value="1920x1080">Landscape 16:9 (1920 × 1080) [YouTube]</option>
+              <option value="1080x1080">Square 1:1 (1080 × 1080) [Feed]</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="newCompFps">Frame Rate</label>
+            <select id="newCompFps">
+              <option value="24" selected>24 fps (Cinematic)</option>
+              <option value="30">30 fps (Standard Social)</option>
+              <option value="60">60 fps (Smooth)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mode 2: Single Comp Audio -->
+  <div id="sectionCompAudio" style="display: none;">
+    <div class="card">
+      <div class="card-title">Source Composition</div>
+      <div class="form-group">
+        <label for="sourceCompSelect">Select Composition with Speech Audio</label>
+        <div class="input-row">
+          <select id="sourceCompSelect" onchange="handleTargetCompChange()"></select>
+          <button class="btn btn-icon" title="Refresh Compositions" onclick="refreshProjectComps()">↻</button>
+        </div>
+      </div>
+      <p style="font-size: 10px; color: var(--text-muted); margin-top: 6px; line-height: 1.3;">
+        Mixes and transcribes all audio layers from this composition, generating in-sync animated subtitles directly inside it.
+      </p>
+    </div>
+  </div>
+
+  <!-- Mode 3: Batch Compositions -->
+  <div id="sectionBatch" style="display: none;">
+    <div class="card">
+      <div class="card-title">
+        <span>Batch Compositions</span>
+        <span class="badge" id="batchCountBadge">0 selected</span>
+      </div>
+      <div class="batch-toolbar">
+        <button class="btn btn-secondary btn-sm" onclick="selectAllBatchComps(true)">Select All</button>
+        <button class="btn btn-secondary btn-sm" onclick="selectAllBatchComps(false)">Deselect All</button>
+        <button class="btn btn-icon btn-sm" title="Refresh Compositions" onclick="refreshProjectComps()">↻</button>
+      </div>
+      <div class="comp-checklist" id="batchCompChecklist">
+        <!-- Dynamically populated with compositions -->
+      </div>
+      <p style="font-size: 10px; color: var(--text-muted); margin-top: 6px; line-height: 1.3;">
+        Generates subtitles for all checked compositions in sequence using your shared styling settings below.
+      </p>
+    </div>
+  </div>
+
+  <!-- Speech & Phrasing Settings -->
+  <div class="card">
+    <div class="card-title">Transcription & Phrasing</div>
+    <div class="form-group">
+      <label for="speechLanguage">Spoken Language</label>
+      <select id="speechLanguage" onchange="saveCurrentSettings()">
+        <option value="es" selected>Spanish (Español)</option>
+        <option value="en">English</option>
+        <option value="auto">Auto-Detect Language</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+        <label for="wordsPerChunk" style="margin-bottom: 0;">Words Per Phrase</label>
+        <span class="range-val" id="wordsPerChunkVal">3 words</span>
+      </div>
+      <input type="range" id="wordsPerChunk" min="1" max="5" value="3" oninput="document.getElementById('wordsPerChunkVal').innerText = this.value + ' words'; saveCurrentSettings();">
+    </div>
+  </div>
+
+  <!-- Styling Customization (Collapsible) -->
+  <div class="card">
+    <div class="collapsible-trigger" onclick="toggleStylingSection()">
+      <span style="font-weight: 600; font-size: 11px; text-transform: uppercase; color: var(--text-muted);">Subtitle Style & Font Options</span>
+      <span id="stylingArrow" style="font-size: 10px;">▼</span>
+    </div>
+    <div class="collapsible-content" id="stylingContent">
+      <!-- Font Selection with Variations -->
+      <div class="form-group">
+        <label for="fontSearchInput">Font Family</label>
+        <div style="display: flex; gap: 4px; margin-bottom: 4px;">
+          <input type="text" id="fontSearchInput" placeholder="🔍 Search installed fonts..." oninput="filterFontFamilies(this.value)">
+          <button class="btn btn-icon" title="Reload Installed Fonts" onclick="loadFonts(true)">↻</button>
+        </div>
+        <select id="styleFontFamily" onchange="handleFontFamilyChange()"></select>
+      </div>
+
+      <div class="form-group">
+        <label for="styleFontVariation">Variation / Weight</label>
+        <select id="styleFontVariation" onchange="handleFontVariationChange()"></select>
+      </div>
+
+      <div class="form-group" style="margin-top: 6px; margin-bottom: 12px;">
+        <button class="btn btn-secondary" id="btnApplyFont" style="width: 100%; font-size: 11px; padding: 6px;" title="Apply this font to all subtitles in the active comp" onclick="applyFontToActiveComp()">
+          🔄 Apply Font to Active Subtitles
+        </button>
+      </div>
+
+      <!-- Typography & Layout -->
+      <div class="form-group">
+        <div class="input-row">
+          <div style="flex: 1;">
+            <label for="styleFontSize">Font Size (px)</label>
+            <input type="number" id="styleFontSize" value="62" min="20" max="250" onchange="saveCurrentSettings()">
+          </div>
+          <div style="flex: 1;">
+            <label for="styleSpacing">Word Spacing</label>
+            <input type="number" id="styleSpacing" value="18" min="0" max="100" onchange="saveCurrentSettings()">
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="stylePosY">Vertical Position Y</label>
+        <input type="number" id="stylePosY" value="1380" min="100" max="3000" onchange="saveCurrentSettings()">
+      </div>
+
+      <!-- Colors -->
+      <div class="form-group">
+        <div class="input-row">
+          <div style="flex: 1;">
+            <label for="styleTextColor">Text Color</label>
+            <div class="color-input-wrapper">
+              <input type="color" id="styleTextColor" value="#ffffff" onchange="saveCurrentSettings()">
+              <span id="styleTextColorLabel" style="font-size: 10px; color: var(--text-muted);">#FFFFFF</span>
+            </div>
+          </div>
+          <div style="flex: 1;">
+            <label for="styleBoxColor">Box Color</label>
+            <div class="color-input-wrapper">
+              <input type="color" id="styleBoxColor" value="#1a1a1e" onchange="saveCurrentSettings()">
+              <span id="styleBoxColorLabel" style="font-size: 10px; color: var(--text-muted);">#1A1A1E</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Box Dimensions & Roundness -->
+      <div class="form-group">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+          <label for="styleBoxOpacity" style="margin-bottom: 0;">Box Opacity</label>
+          <span class="range-val" id="styleBoxOpacityVal">85%</span>
+        </div>
+        <input type="range" id="styleBoxOpacity" min="0" max="100" value="85" oninput="document.getElementById('styleBoxOpacityVal').innerText = this.value + '%'; saveCurrentSettings();">
+      </div>
+
+      <div class="form-group">
+        <div class="input-row">
+          <div style="flex: 1;">
+            <label for="styleBoxRoundness">Roundness</label>
+            <input type="number" id="styleBoxRoundness" value="18" min="0" max="100" onchange="saveCurrentSettings()">
+          </div>
+          <div style="flex: 1;">
+            <label for="styleBoxPadX">Pad X</label>
+            <input type="number" id="styleBoxPadX" value="26" min="0" max="100" onchange="saveCurrentSettings()">
+          </div>
+          <div style="flex: 1;">
+            <label for="styleBoxPadY">Pad Y</label>
+            <input type="number" id="styleBoxPadY" value="16" min="0" max="100" onchange="saveCurrentSettings()">
+          </div>
+        </div>
+      </div>
+
+      <!-- Drop Shadow Controls -->
+      <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border-color);">
+        <span style="font-size: 10px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); display: block; margin-bottom: 6px;">Drop Shadow Settings</span>
+        <div class="form-group">
+          <div class="input-row">
+            <div style="flex: 1;">
+              <label for="styleShadowColor">Shadow Color</label>
+              <div class="color-input-wrapper">
+                <input type="color" id="styleShadowColor" value="#000000" onchange="saveCurrentSettings()">
+                <span id="styleShadowColorLabel" style="font-size: 10px; color: var(--text-muted);">#000000</span>
+              </div>
+            </div>
+            <div style="flex: 1;">
+              <label for="styleShadowOpacity">Opacity (%)</label>
+              <input type="number" id="styleShadowOpacity" value="60" min="0" max="100" onchange="saveCurrentSettings()">
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <div class="input-row">
+            <div style="flex: 1;">
+              <label for="styleShadowDist">Distance</label>
+              <input type="number" id="styleShadowDist" value="3" min="0" max="50" onchange="saveCurrentSettings()">
+            </div>
+            <div style="flex: 1;">
+              <label for="styleShadowSoft">Softness</label>
+              <input type="number" id="styleShadowSoft" value="6" min="0" max="100" onchange="saveCurrentSettings()">
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Primary Action -->
+  <button class="btn btn-primary" id="btnGenerate" onclick="startGeneration()">
+    ⚡ Generate Subtitles
+  </button>
+
+  <!-- Status & Progress -->
+  <div class="status-box" id="statusBox" style="display: none;">
+    <div class="status-header">
+      <span class="status-text" id="statusLabel">Ready</span>
+    </div>
+    <div class="progress-bar-bg">
+      <div class="progress-bar-fill indeterminate" id="progressFill"></div>
+    </div>
+    <div class="log-box" id="logBox"></div>
+  </div>
+
+  <script src="csinterface.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
