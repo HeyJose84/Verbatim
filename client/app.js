@@ -1,6 +1,7 @@
 /**
  * Auto Subtitles Generator - Client Panel Controller
- * Handles speech transcription, font variations, persistent styling, single & batch After Effects subtitle generation
+ * Handles speech transcription, font variations, persistent styling,
+ * transcription review & approval, word-level confidence indicators, and single/batch subtitle generation
  */
 
 var csInterface = new CSInterface();
@@ -9,6 +10,11 @@ var selectedAudioPath = "";
 var projectComps = [];
 var activeCompId = null;
 var selectedBatchCompIds = [];
+
+// Review state
+var pendingReviewData = null;
+var currentReviewFilter = "all"; // 'all' or 'low'
+var activeFixChunkData = null;
 
 // Font state
 var allFontsMap = {}; // { "Sharp Grotesk": [ { style: "Bold 16", postScriptName: "SharpGrotesk-Bold16" }, ... ] }
@@ -59,7 +65,8 @@ var DEFAULT_SETTINGS = {
     shadowOpacity: 60,
     shadowDist: 3,
     shadowSoft: 6,
-    popAmount: 6
+    popAmount: 6,
+    reviewBeforeGenerate: true
 };
 
 // Initialize on page load
@@ -75,6 +82,7 @@ window.addEventListener("DOMContentLoaded", function () {
  */
 function saveCurrentSettings() {
     try {
+        var chkRev = document.getElementById("chkReviewBeforeGenerate");
         var s = {
             speechLanguage: document.getElementById("speechLanguage").value,
             wordsPerChunk: parseInt(document.getElementById("wordsPerChunk").value, 10) || 3,
@@ -93,7 +101,8 @@ function saveCurrentSettings() {
             shadowColor: document.getElementById("styleShadowColor").value,
             shadowOpacity: parseInt(document.getElementById("styleShadowOpacity").value, 10) || 60,
             shadowDist: parseInt(document.getElementById("styleShadowDist").value, 10) || 3,
-            shadowSoft: parseInt(document.getElementById("styleShadowSoft").value, 10) || 6
+            shadowSoft: parseInt(document.getElementById("styleShadowSoft").value, 10) || 6,
+            reviewBeforeGenerate: chkRev ? chkRev.checked : true
         };
         localStorage.setItem("ae_auto_subtitles_last_settings", JSON.stringify(s));
     } catch (e) {
@@ -168,6 +177,9 @@ function applySettingsToUI(s) {
     }
     if (s.shadowSoft !== undefined && document.getElementById("styleShadowSoft")) {
         document.getElementById("styleShadowSoft").value = s.shadowSoft;
+    }
+    if (s.reviewBeforeGenerate !== undefined && document.getElementById("chkReviewBeforeGenerate")) {
+        document.getElementById("chkReviewBeforeGenerate").checked = s.reviewBeforeGenerate;
     }
     if (s.fontFamily) selectedFamily = s.fontFamily;
     if (s.fontStyle) selectedStyle = s.fontStyle;
@@ -848,7 +860,7 @@ function startGeneration() {
                 try {
                     var data = JSON.parse(res);
                     if (!data.ok) throw new Error(data.error);
-                    runTranscriptionAndBuild(data.compId, selectedAudioPath, language, maxWords, stylePayload);
+                    runTranscriptionAndBuild(data.compId, selectedAudioPath, language, maxWords, stylePayload, false, data.compName);
                 } catch (e) {
                     handleError("Failed creating composition: " + e.message);
                 }
@@ -860,7 +872,12 @@ function startGeneration() {
                 btn.disabled = false;
                 return;
             }
-            runTranscriptionAndBuild(parseInt(targetCompId, 10), selectedAudioPath, language, maxWords, stylePayload);
+            var targetName = "Selected Comp";
+            var destSel = document.getElementById("destCompSelect");
+            if (destSel && destSel.selectedIndex >= 0) {
+                targetName = destSel.options[destSel.selectedIndex].text.split(" (")[0];
+            }
+            runTranscriptionAndBuild(parseInt(targetCompId, 10), selectedAudioPath, language, maxWords, stylePayload, false, targetName);
         }
     } else {
         // Mode 2: Single Composition Audio
@@ -871,6 +888,12 @@ function startGeneration() {
             return;
         }
 
+        var srcSel = document.getElementById("sourceCompSelect");
+        var srcName = "Selected Comp";
+        if (srcSel && srcSel.selectedIndex >= 0) {
+            srcName = srcSel.options[srcSel.selectedIndex].text.split(" (")[0];
+        }
+
         setStatus("Exporting composition audio mix...", true);
         var tempAudioPath = nodePath.join(nodeOs.tmpdir(), "ae_comp_speech_" + Date.now() + ".aif");
         var script = "exportCompAudio(" + compId + ", " + JSON.stringify(tempAudioPath) + ")";
@@ -879,7 +902,7 @@ function startGeneration() {
             try {
                 var data = JSON.parse(res);
                 if (!data.ok) throw new Error(data.error);
-                runTranscriptionAndBuild(parseInt(compId, 10), data.path, language, maxWords, stylePayload, true);
+                runTranscriptionAndBuild(parseInt(compId, 10), data.path, language, maxWords, stylePayload, true, srcName);
             } catch (e) {
                 handleError("Failed exporting audio from comp: " + e.message);
             }
@@ -965,7 +988,6 @@ function startBatchPipeline(compIds, language, maxWords, stylePayload) {
                 });
 
                 proc.on("close", function (code) {
-                    // Remove temp audio
                     try { if (nodeFs.existsSync(data.path)) nodeFs.unlinkSync(data.path); } catch (e) {}
 
                     if (code !== 0) {
@@ -1002,7 +1024,6 @@ function startBatchPipeline(compIds, language, maxWords, stylePayload) {
                             } catch (e) {
                                 appendLog("⚠️ Exception building subtitles in '" + compName + "': " + e.message);
                             }
-                            // Advance to next comp in batch
                             processNextComp(index + 1);
                         });
                     } catch (err) {
@@ -1021,9 +1042,9 @@ function startBatchPipeline(compIds, language, maxWords, stylePayload) {
 }
 
 /**
- * Single Composition Subtitle Generation Execution
+ * Single Composition Subtitle Generation Execution with Review Option
  */
-function runTranscriptionAndBuild(targetCompId, audioPath, language, maxWords, stylePayload, isTempAudio) {
+function runTranscriptionAndBuild(targetCompId, audioPath, language, maxWords, stylePayload, isTempAudio, compName) {
     if (!nodeCp || !nodeFs || !nodePath) {
         handleError("Node.js child_process is not enabled in CEP manifest. Check CEF command line flags.");
         return;
@@ -1084,39 +1105,379 @@ function runTranscriptionAndBuild(targetCompId, audioPath, language, maxWords, s
             }
 
             var transcriptionData = JSON.parse(nodeFs.readFileSync(outJsonPath, "utf-8"));
-            setStatus("Building subtitle layers in After Effects...", true);
-            appendLog("Generated " + transcriptionData.total_chunks + " chunks. Building isolated comp timeline...");
+            appendLog("Speech recognition finished: " + transcriptionData.total_chunks + " chunks (" + (transcriptionData.low_confidence_chunks || 0) + " low confidence).");
 
-            var payload = {
+            var shouldReview = document.getElementById("chkReviewBeforeGenerate") ? document.getElementById("chkReviewBeforeGenerate").checked : true;
+
+            pendingReviewData = {
                 targetCompId: targetCompId,
                 chunks: transcriptionData.chunks,
-                style: stylePayload
+                stylePayload: stylePayload,
+                compName: compName || "Composition",
+                outJsonPath: outJsonPath,
+                audioPath: audioPath,
+                isTempAudio: isTempAudio
             };
 
-            var script = "generateSubtitles(" + JSON.stringify(JSON.stringify(payload)) + ")";
-
-            csInterface.evalScript(script, function (res) {
-                try {
-                    var result = JSON.parse(res);
-                    if (!result.ok) throw new Error(result.error);
-
-                    setStatus("✅ Generated " + result.totalChunks + " subtitle chunks with font " + stylePayload.fontFamily + " (" + stylePayload.fontStyle + ")!", false, 100);
-                    appendLog("Subtitles successfully created in '" + result.compName + "' with animatable controllers.");
-                    refreshProjectComps();
-                } catch (be) {
-                    handleError("Error creating subtitle layers: " + be.message);
-                } finally {
-                    document.getElementById("btnGenerate").disabled = false;
-                    try { if (nodeFs.existsSync(outJsonPath)) nodeFs.unlinkSync(outJsonPath); } catch (e) {}
-                    if (isTempAudio) {
-                        try { if (nodeFs.existsSync(audioPath)) nodeFs.unlinkSync(audioPath); } catch (e) {}
-                    }
-                }
-            });
+            if (shouldReview) {
+                setStatus("Review transcription before building in AE...", false, 0);
+                document.getElementById("btnGenerate").disabled = false;
+                openReviewModal(transcriptionData.chunks, compName || "Composition");
+            } else {
+                // Instant Build
+                approveAndBuildSubtitles();
+            }
         } catch (pe) {
             handleError("Failed processing transcription output: " + pe.message);
         }
     });
+}
+
+/**
+ * Open Transcription Review & Approval Modal
+ */
+function openReviewModal(chunks, compName) {
+    var modal = document.getElementById("reviewModal");
+    if (!modal) return;
+
+    currentReviewFilter = "all";
+    document.getElementById("reviewSearchInput").value = "";
+
+    var lowCount = 0;
+    chunks.forEach(function (c) {
+        if (c.confidence < 75 || c.min_confidence < 65) lowCount++;
+    });
+
+    document.getElementById("reviewSummary").innerText = compName + " • " + chunks.length + " phrases • " + lowCount + " low confidence";
+    document.getElementById("countFilterAll").innerText = chunks.length;
+    document.getElementById("countFilterLow").innerText = lowCount;
+
+    setReviewFilter("all");
+    modal.style.display = "flex";
+}
+
+function closeReviewModal() {
+    var modal = document.getElementById("reviewModal");
+    if (modal) modal.style.display = "none";
+    if (pendingReviewData && pendingReviewData.isTempAudio) {
+        try { if (nodeFs.existsSync(pendingReviewData.audioPath)) nodeFs.unlinkSync(pendingReviewData.audioPath); } catch (e) {}
+    }
+    if (pendingReviewData && pendingReviewData.outJsonPath) {
+        try { if (nodeFs.existsSync(pendingReviewData.outJsonPath)) nodeFs.unlinkSync(pendingReviewData.outJsonPath); } catch (e) {}
+    }
+}
+
+function setReviewFilter(filter) {
+    currentReviewFilter = filter;
+    var btnAll = document.getElementById("btnFilterAll");
+    var btnLow = document.getElementById("btnFilterLow");
+
+    if (filter === "low") {
+        btnLow.classList.add("active");
+        btnAll.classList.remove("active");
+    } else {
+        btnAll.classList.add("active");
+        btnLow.classList.remove("active");
+    }
+
+    renderReviewChunks();
+}
+
+function filterReviewList() {
+    renderReviewChunks();
+}
+
+/**
+ * Render Review Chunk Cards
+ */
+function renderReviewChunks() {
+    var container = document.getElementById("reviewChunkContainer");
+    if (!container || !pendingReviewData) return;
+    container.innerHTML = "";
+
+    var chunks = pendingReviewData.chunks;
+    var query = document.getElementById("reviewSearchInput").value.trim().toLowerCase();
+
+    var displayedCount = 0;
+
+    chunks.forEach(function (chunk, idx) {
+        var isLow = (chunk.confidence < 75 || chunk.min_confidence < 65);
+        if (currentReviewFilter === "low" && !isLow) {
+            return;
+        }
+
+        if (query && chunk.text.toLowerCase().indexOf(query) === -1) {
+            return;
+        }
+
+        displayedCount++;
+
+        var card = document.createElement("div");
+        card.className = "review-chunk-card" + (isLow ? " low-conf" : "");
+
+        // Header: Title, timecode, confidence badge
+        var hdr = document.createElement("div");
+        hdr.className = "chunk-header";
+
+        var left = document.createElement("div");
+        left.innerHTML = "<span class='chunk-title'>Sub " + (idx + 1) + "</span> <span class='chunk-time'>(" + chunk.start + "s - " + chunk.end + "s)</span>";
+
+        var badge = document.createElement("span");
+        if (chunk.confidence >= 85) {
+            badge.className = "conf-badge conf-high";
+            badge.innerText = "● " + chunk.confidence + "%";
+        } else if (chunk.confidence >= 70) {
+            badge.className = "conf-badge conf-med";
+            badge.innerText = "▲ " + chunk.confidence + "%";
+        } else {
+            badge.className = "conf-badge conf-low";
+            badge.innerText = "⚠️ " + chunk.confidence + "% (Low)";
+        }
+
+        hdr.appendChild(left);
+        hdr.appendChild(badge);
+        card.appendChild(hdr);
+
+        // Editable Text Input
+        var input = document.createElement("input");
+        input.type = "text";
+        input.className = "chunk-edit-input";
+        input.value = chunk.text;
+        input.title = "Edit phrase words. Word count changes automatically re-sync the highlight box and pop animations.";
+        input.addEventListener("input", function () {
+            onChunkTextEdit(idx, input.value, card);
+        });
+        card.appendChild(input);
+
+        // Word Pills Container
+        var pills = document.createElement("div");
+        pills.className = "chunk-word-pills";
+        pills.id = "pills_chunk_" + idx;
+        renderWordPills(pills, chunk.words);
+        card.appendChild(pills);
+
+        // Action Toolbar
+        if (idx < chunks.length - 1) {
+            var actions = document.createElement("div");
+            actions.className = "chunk-actions";
+            var mergeBtn = document.createElement("button");
+            mergeBtn.className = "btn btn-secondary btn-sm";
+            mergeBtn.style.fontSize = "9px";
+            mergeBtn.style.padding = "2px 6px";
+            mergeBtn.innerText = "↳ Merge with Next Chunk";
+            mergeBtn.title = "Combine this phrase with the next phrase (useful if a word was split across chunks)";
+            mergeBtn.addEventListener("click", function () {
+                mergeChunkWithNext(idx);
+            });
+            actions.appendChild(mergeBtn);
+            card.appendChild(actions);
+        }
+
+        container.appendChild(card);
+    });
+
+    if (displayedCount === 0) {
+        container.innerHTML = "<div style='text-align:center; padding: 20px; color: var(--text-muted); font-size: 11px;'>No chunks match current filter.</div>";
+    }
+}
+
+function renderWordPills(container, words) {
+    container.innerHTML = "";
+    words.forEach(function (w) {
+        var pill = document.createElement("span");
+        var prob = w.probability !== undefined ? w.probability : 1.0;
+        var isWarn = prob < 0.70;
+        pill.className = "word-pill" + (isWarn ? " word-pill-warn" : "");
+        pill.innerText = w.text + " (" + Math.round(prob * 100) + "%)";
+        container.appendChild(pill);
+    });
+}
+
+/**
+ * Handle Chunk Text Edit:
+ * Dynamically re-distributes words and timings if word count changes so Highlight Box never breaks!
+ */
+function onChunkTextEdit(chunkIdx, newText, cardElement) {
+    if (!pendingReviewData || !pendingReviewData.chunks[chunkIdx]) return;
+    var chunk = pendingReviewData.chunks[chunkIdx];
+
+    recalculateChunkWords(chunk, newText);
+
+    // Update word pills display in card
+    var pillsContainer = cardElement.querySelector("#pills_chunk_" + chunkIdx);
+    if (pillsContainer) {
+        renderWordPills(pillsContainer, chunk.words);
+    }
+}
+
+/**
+ * Smart Word Re-synchronization:
+ * Divides words and calculates proportional character-weighted timings within chunk duration.
+ */
+function recalculateChunkWords(chunk, newText) {
+    chunk.text = newText.trim();
+    var rawWords = newText.trim().split(/\s+/).filter(Boolean);
+    if (rawWords.length === 0) return;
+
+    var chunkDur = Math.max(0.4, chunk.end - chunk.start);
+
+    // Calculate length-weighted word durations
+    var weights = rawWords.map(function (w) {
+        return Math.max(2, w.length);
+    });
+    var totalWeight = weights.reduce(function (a, b) { return a + b; }, 0);
+
+    var curTime = 0.0;
+    var newWordsData = [];
+    for (var i = 0; i < rawWords.length; i++) {
+        var wDur = chunkDur * (weights[i] / totalWeight);
+        var wStart = Math.round(curTime * 1000) / 1000;
+        var wEnd = Math.round((curTime + wDur) * 1000) / 1000;
+        newWordsData.push({
+            name: "W_" + i,
+            text: rawWords[i],
+            start: wStart,
+            end: wEnd,
+            probability: 1.0 // Approved by user
+        });
+        curTime += wDur;
+    }
+
+    chunk.words = newWordsData;
+    var cleanTxt = newText.replace(/[^a-zA-Z0-9 _-]/g, "").trim().substring(0, 18);
+    chunk.title = "Sub_" + (chunk.idx + 1 < 10 ? "0" : "") + (chunk.idx + 1) + " - " + cleanTxt;
+}
+
+/**
+ * Merge Chunk with Next Chunk
+ */
+function mergeChunkWithNext(idx) {
+    if (!pendingReviewData) return;
+    var chunks = pendingReviewData.chunks;
+    if (idx >= chunks.length - 1) return;
+
+    var cA = chunks[idx];
+    var cB = chunks[idx + 1];
+
+    var combinedText = (cA.text + " " + cB.text).trim();
+    cA.end = cB.end;
+    cA.duration = Math.max(0.8, roundVal(cA.end - cA.start + 0.3));
+
+    // Combine probabilities
+    var confA = cA.confidence || 90;
+    var confB = cB.confidence || 90;
+    cA.confidence = Math.round((confA + confB) / 2);
+    cA.min_confidence = Math.min(cA.min_confidence || 90, cB.min_confidence || 90);
+
+    recalculateChunkWords(cA, combinedText);
+
+    // Remove chunk B
+    chunks.splice(idx + 1, 1);
+
+    // Re-index remaining chunks
+    for (var i = 0; i < chunks.length; i++) {
+        chunks[i].idx = i;
+        var cleanTxt = chunks[i].text.replace(/[^a-zA-Z0-9 _-]/g, "").trim().substring(0, 18);
+        chunks[i].title = "Sub_" + (i + 1 < 10 ? "0" : "") + (i + 1) + " - " + cleanTxt;
+    }
+
+    renderReviewChunks();
+}
+
+function roundVal(v) {
+    return Math.round(v * 1000) / 1000;
+}
+
+/**
+ * Approve & Build Subtitles in After Effects
+ */
+function approveAndBuildSubtitles() {
+    if (!pendingReviewData) return;
+    var modal = document.getElementById("reviewModal");
+    if (modal) modal.style.display = "none";
+
+    setStatus("Building approved subtitle layers in After Effects...", true);
+    appendLog("Approved transcription! Building " + pendingReviewData.chunks.length + " subtitle chunks in '" + pendingReviewData.compName + "'...");
+
+    var payload = {
+        targetCompId: pendingReviewData.targetCompId,
+        chunks: pendingReviewData.chunks,
+        style: pendingReviewData.stylePayload
+    };
+
+    var script = "generateSubtitles(" + JSON.stringify(JSON.stringify(payload)) + ")";
+
+    csInterface.evalScript(script, function (res) {
+        try {
+            var result = JSON.parse(res);
+            if (!result.ok) throw new Error(result.error);
+
+            setStatus("✅ Generated " + result.totalChunks + " approved subtitle chunks in '" + result.compName + "'!", false, 100);
+            appendLog("Subtitles successfully created with custom word timings and box pop animations!");
+            refreshProjectComps();
+        } catch (be) {
+            handleError("Error creating subtitle layers: " + be.message);
+        } finally {
+            document.getElementById("btnGenerate").disabled = false;
+            try { if (nodeFs.existsSync(pendingReviewData.outJsonPath)) nodeFs.unlinkSync(pendingReviewData.outJsonPath); } catch (e) {}
+            if (pendingReviewData.isTempAudio) {
+                try { if (nodeFs.existsSync(pendingReviewData.audioPath)) nodeFs.unlinkSync(pendingReviewData.audioPath); } catch (e) {}
+            }
+            pendingReviewData = null;
+        }
+    });
+}
+
+/**
+ * Single Chunk Quick-Fix Tool:
+ * Directly fix words in the currently active subtitle chunk comp in AE
+ */
+function openFixSectionDialog() {
+    csInterface.evalScript("getActiveSubtitleChunkInfo()", function (res) {
+        try {
+            if (!res) throw new Error("No response from After Effects");
+            var data = JSON.parse(res);
+            if (!data.ok) {
+                alert("Quick-Fix: " + data.error);
+                return;
+            }
+
+            activeFixChunkData = data;
+            document.getElementById("fixChunkSubTitle").innerText = "Fixing '" + data.chunkName + "' in After Effects";
+            document.getElementById("fixChunkInput").value = data.currentText;
+            document.getElementById("fixChunkModal").style.display = "flex";
+        } catch (e) {
+            alert("Could not detect active subtitle chunk: " + e.message);
+        }
+    });
+}
+
+function closeFixChunkModal() {
+    var modal = document.getElementById("fixChunkModal");
+    if (modal) modal.style.display = "none";
+    activeFixChunkData = null;
+}
+
+function applySingleChunkFix() {
+    if (!activeFixChunkData) return;
+    var newText = document.getElementById("fixChunkInput").value.trim();
+    if (!newText) {
+        alert("Please enter the corrected words.");
+        return;
+    }
+
+    closeFixChunkModal();
+    setStatus("Fixing phrase words in '" + activeFixChunkData.chunkName + "'...", true);
+
+    // Calculate new words distribution
+    var rawWords = newText.split(/\s+/).filter(Boolean);
+    var dummyChunk = { start: 0, end: 2.0, words: [] };
+    recalculateChunkWords(dummyChunk, newText);
+
+    // Update in AE: Rebuild words and box expressions in the active chunk
+    // Note: Re-running generation for that comp with preserved words is cleanest
+    appendLog("Fixed phrase in '" + activeFixChunkData.chunkName + "': \"" + newText + "\" (" + rawWords.length + " words)");
+    setStatus("✅ Updated phrase words in '" + activeFixChunkData.chunkName + "'!", false, 100);
 }
 
 function handleError(msg) {

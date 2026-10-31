@@ -104,28 +104,44 @@ def transcribe_and_chunk(audio_path, output_json, language="es", max_words=3, ma
 
     # Prepare compact chunks ready for After Effects JSX composition building
     compact_chunks = []
+    low_confidence_count = 0
+
     for idx, chunk in enumerate(chunks):
         chunk_dur = max(0.8, round(chunk["end"] - chunk["start"] + 0.3, 3))
         clean_txt = "".join([c for c in chunk["text"] if c.isalnum() or c in (" ", "_", "-")]).strip()[:18]
         comp_title = f"Sub_{idx+1:02d} - {clean_txt}"
 
         words_data = []
+        chunk_probs = []
         for w_i, w in enumerate(chunk["words"]):
             loc_start = max(0.0, round(w["start"] - chunk["start"], 3))
             loc_end = max(loc_start + 0.1, round(w["end"] - chunk["start"], 3))
+            prob = float(w.get("probability", 1.0))
+            chunk_probs.append(prob)
             words_data.append({
                 "name": f"W_{w_i}",
                 "text": w["word"],
                 "start": loc_start,
-                "end": loc_end
+                "end": loc_end,
+                "probability": round(prob, 3)
             })
+
+        avg_prob = sum(chunk_probs) / max(1, len(chunk_probs))
+        min_prob = min(chunk_probs) if chunk_probs else 1.0
+        conf_pct = round(avg_prob * 100, 1)
+        min_conf_pct = round(min_prob * 100, 1)
+        if conf_pct < 75.0 or min_conf_pct < 65.0:
+            low_confidence_count += 1
 
         compact_chunks.append({
             "idx": idx,
             "title": comp_title,
+            "text": chunk["text"],
             "start": round(chunk["start"], 3),
             "end": round(chunk["end"], 3),
             "duration": chunk_dur,
+            "confidence": conf_pct,
+            "min_confidence": min_conf_pct,
             "words": words_data
         })
 
@@ -136,6 +152,7 @@ def transcribe_and_chunk(audio_path, output_json, language="es", max_words=3, ma
         "duration": round(total_audio_dur, 3),
         "total_words": len(all_words),
         "total_chunks": len(compact_chunks),
+        "low_confidence_chunks": low_confidence_count,
         "chunks": compact_chunks
     }
 

@@ -465,24 +465,35 @@ function generateSubtitles(payloadJsonStr) {
         ctrl.name = ctrlLayerName;
         ctrl.label = 13; // Cyan color tag in After Effects for instant identification!
 
-        // Controllers
-        var sFontSize = ctrl.property("Effects").addProperty("ADBE Slider Control");
-        sFontSize.name = "Font Size"; sFontSize.property("Slider").setValue(fontSize);
-
-        var sGap = ctrl.property("Effects").addProperty("ADBE Slider Control");
-        sGap.name = "Word Spacing"; sGap.property("Slider").setValue(wordSpacing);
+        // ─── GROUP 1: SETUP & TIMING ───
+        var g1 = ctrl.property("Effects").addProperty("ADBE Checkbox Control");
+        g1.name = "══ [1] SETUP & TIMING ══";
+        g1.property("Checkbox").setValue(1);
 
         var sPosY = ctrl.property("Effects").addProperty("ADBE Slider Control");
         sPosY.name = "Vertical Position Y"; sPosY.property("Slider").setValue(posY);
 
-        var sPadX = ctrl.property("Effects").addProperty("ADBE Slider Control");
-        sPadX.name = "Box Padding X"; sPadX.property("Slider").setValue(boxPadX);
+        var sGap = ctrl.property("Effects").addProperty("ADBE Slider Control");
+        sGap.name = "Word Spacing"; sGap.property("Slider").setValue(wordSpacing);
 
-        var sPadY = ctrl.property("Effects").addProperty("ADBE Slider Control");
-        sPadY.name = "Box Padding Y"; sPadY.property("Slider").setValue(boxPadY);
+        var sPopAmt = ctrl.property("Effects").addProperty("ADBE Slider Control");
+        sPopAmt.name = "Pop Scale Amount"; sPopAmt.property("Slider").setValue(popAmt);
 
-        var sRound = ctrl.property("Effects").addProperty("ADBE Slider Control");
-        sRound.name = "Box Roundness"; sRound.property("Slider").setValue(boxRoundness);
+        // ─── GROUP 2: FONT & TEXT STYLING ───
+        var g2 = ctrl.property("Effects").addProperty("ADBE Checkbox Control");
+        g2.name = "══ [2] FONT & TEXT ══";
+        g2.property("Checkbox").setValue(1);
+
+        var sFontSize = ctrl.property("Effects").addProperty("ADBE Slider Control");
+        sFontSize.name = "Font Size"; sFontSize.property("Slider").setValue(fontSize);
+
+        var sTextColor = ctrl.property("Effects").addProperty("ADBE Color Control");
+        sTextColor.name = "Text Color"; sTextColor.property("Color").setValue([textColor[0], textColor[1], textColor[2], 1]);
+
+        // ─── GROUP 3: HIGHLIGHT BOX STYLING ───
+        var g3 = ctrl.property("Effects").addProperty("ADBE Checkbox Control");
+        g3.name = "══ [3] HIGHLIGHT BOX ══";
+        g3.property("Checkbox").setValue(1);
 
         var sBoxColor = ctrl.property("Effects").addProperty("ADBE Color Control");
         sBoxColor.name = "Box Color"; sBoxColor.property("Color").setValue(boxColor);
@@ -490,11 +501,19 @@ function generateSubtitles(payloadJsonStr) {
         var sBoxOpacity = ctrl.property("Effects").addProperty("ADBE Slider Control");
         sBoxOpacity.name = "Box Opacity"; sBoxOpacity.property("Slider").setValue(boxOpacity);
 
-        var sPopAmt = ctrl.property("Effects").addProperty("ADBE Slider Control");
-        sPopAmt.name = "Pop Scale Amount"; sPopAmt.property("Slider").setValue(popAmt);
+        var sRound = ctrl.property("Effects").addProperty("ADBE Slider Control");
+        sRound.name = "Box Roundness"; sRound.property("Slider").setValue(boxRoundness);
 
-        var sTextColor = ctrl.property("Effects").addProperty("ADBE Color Control");
-        sTextColor.name = "Text Color"; sTextColor.property("Color").setValue([textColor[0], textColor[1], textColor[2], 1]);
+        var sPadX = ctrl.property("Effects").addProperty("ADBE Slider Control");
+        sPadX.name = "Box Padding X"; sPadX.property("Slider").setValue(boxPadX);
+
+        var sPadY = ctrl.property("Effects").addProperty("ADBE Slider Control");
+        sPadY.name = "Box Padding Y"; sPadY.property("Slider").setValue(boxPadY);
+
+        // ─── GROUP 4: DROP SHADOW STYLING ───
+        var g4 = ctrl.property("Effects").addProperty("ADBE Checkbox Control");
+        g4.name = "══ [4] DROP SHADOW ══";
+        g4.property("Checkbox").setValue(1);
 
         var sShadowColor = ctrl.property("Effects").addProperty("ADBE Color Control");
         sShadowColor.name = "Shadow Color"; sShadowColor.property("Color").setValue(shadowColor);
@@ -793,3 +812,39 @@ function generateSubtitles(payloadJsonStr) {
         app.endUndoGroup();
     }
 }
+
+/**
+ * Detects if the user currently has an active subtitle chunk comp open or selected
+ */
+function getActiveSubtitleChunkInfo() {
+    try {
+        var activeItem = app.project.activeItem;
+        if (!activeItem || !(activeItem instanceof CompItem)) {
+            return SubtitleJSON.stringify({ ok: false, error: "Please open or select a subtitle chunk comp in After Effects." });
+        }
+
+        if (activeItem.name.indexOf("Sub_") === -1 && activeItem.name.indexOf("[Chunk]") === -1) {
+            return SubtitleJSON.stringify({ ok: false, error: "Active composition '" + activeItem.name + "' is not a subtitle chunk comp." });
+        }
+
+        var words = [];
+        for (var l = 1; l <= activeItem.numLayers; l++) {
+            var lyr = activeItem.layer(l);
+            if (lyr.name.indexOf("W_") === 0 && lyr.property("Source Text")) {
+                var doc = lyr.property("Source Text").value;
+                words.push(doc.text);
+            }
+        }
+
+        return SubtitleJSON.stringify({
+            ok: true,
+            chunkId: activeItem.id,
+            chunkName: activeItem.name,
+            currentText: words.join(" "),
+            wordCount: words.length
+        });
+    } catch(err) {
+        return SubtitleJSON.stringify({ ok: false, error: err.toString() });
+    }
+}
+
